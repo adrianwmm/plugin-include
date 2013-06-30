@@ -171,6 +171,12 @@ class helper_plugin_include extends DokuWiki_Plugin { // DokuWiki_Helper_Plugin
                 case 'include_content':
                     $flags['linkonly'] = 0;
                     break;
+				case 'firstthumb':
+                    $flags['firstthumb'] = $value;
+                    break;
+				case 'desc':
+                    $flags['desc'] = 1;
+                    break;
                 case 'inline':
                     $flags['inline'] = 1;
                     break;
@@ -179,6 +185,9 @@ class helper_plugin_include extends DokuWiki_Plugin { // DokuWiki_Helper_Plugin
                     break;
                 case 'notitle':
                     $flags['title'] = 0;
+                    break;
+				case 'titleonly':
+                    $flags['titleonly'] = 1;
                     break;
                 case 'pageexists':
                     $flags['pageexists'] = 1;
@@ -228,7 +237,10 @@ class helper_plugin_include extends DokuWiki_Plugin { // DokuWiki_Helper_Plugin
      * @author Michael Klier <chi@chimeric.de>
      * @author Michael Hamann <michael@content-space.de>
      */
-    function _get_instructions($page, $sect, $mode, $lvl, $flags, $root_id = null, $included_pages = array()) {
+    function _get_instructions($page, $sect, $mode, $lvl, $flags, $root_id = null, $included_pages = array(), $i = 1) {
+
+		global $conf;
+		
         $key = ($sect) ? $page . '#' . $sect : $page;
         $this->includes[$key] = true; // legacy code for keeping compatibility with other plugins
 
@@ -237,8 +249,88 @@ class helper_plugin_include extends DokuWiki_Plugin { // DokuWiki_Helper_Plugin
             global $ID;
             $root_id = $ID;
         }
+		
+		
+		if($flags['titleonly']) {
+			
+            if (page_exists($page) || $flags['pageexists']  == 0) {
+				
+                $title = p_get_first_heading($page);
+			
+				$date = FALSE;
+				$firstthumb = FALSE;
+				$desc = FALSE;
+				
+				global $ID;
+				$backupID = $ID;
+				$ID = $page;
+					$meta = p_get_metadata($page);
+				$ID = $backupID;
+				
+				$date = $meta['date']['created'];
+				$firstthumb = $meta['relation']['firstimage'];
+				$desc = $meta['description']['abstract'];
+				
+				//data
+				if($flags['date']) {
+					$date = ' <span style="font-size: 10px;color: #ddd" class="published" title="'.strftime('%Y-%m-%dT%H:%M:%SZ', $date).'">' . strftime($conf['dformat'], $date)  . '</span>';
+				}
+				
+				
+				//obrazek
+				if($flags['firstthumb']) {
+					
+					$options = explode(',', $flags['firstthumb']);
+				
+					$firstthumb_ = ml($firstthumb, array(), true, '&amp;', true);
 
-        if ($flags['linkonly']) {
+					if($firstthumb) {
+						if($i == (($options[2])?$options[2]:1)) {
+							$img = '<img src="' . $firstthumb_ . '&w='.($options[0]?$options[0]:'50').'&h='.($options[0]?$options[0]:'50').'&tok=' . media_get_token($firstthumb, ($options[0]?$options[0]:'50'), ($options[0]?$options[0]:'50')) . '" style="width: ' . ($options[0]?$options[0]:'50px') . 'px"/>';
+						} elseif($options[1]) {
+							$img = '<img src="' . $firstthumb_ . '&w='.($options[1]) .'&h='.($options[1]) .'&tok=' . media_get_token($firstthumb, ($options[1]) , ($options[1]) ) . '" style="width: ' . ($options[1]) . 'px"/>';
+						}
+					}
+				}
+				
+				//opis
+				if($flags['desc']) {
+					$desc = $meta['description']['abstract'];
+				}
+				
+                if($flags['parlink']) {
+                    $ins = array(
+								
+								array('html', array('<div class="blog_row">', 'code', TRUE)),
+								
+								(($flags['firstthumb'])?array('html', array($img, 'code', TRUE)):NULL),
+								
+								array('html', array('<h2>', 'code', TRUE)),
+								array('internallink', array(':'.$key, $title)),
+								(($flags['date'])?array('html', array($date, 'code', TRUE)):NULL),
+								array('html', array('</h2>', 'code', TRUE)),
+
+								array('p_open', array()),
+								(($flags['desc'])?array('html', array($desc, 'code', TRUE)) :NULL),
+								array('p_close', array()),
+								
+								array('html', array('</div>', 'code', TRUE)),
+								
+							);
+				//liniowe wyświetlanie			
+                } else {
+                    $ins = array(
+								(($flags['firstthumb'])?array('html', array($img, 'code', TRUE)):NULL),
+								array('internallink', array(':'.$key, $title . ' ' . (($date)?$date:'') )),
+								(($flags['date'])?array('html', array($date, 'code', TRUE)):NULL),
+								);
+                }
+				
+            } else {
+                $ins = array();
+            }
+			
+		} elseif ($flags['linkonly']) {
             if (page_exists($page) || $flags['pageexists']  == 0) {
                 $title = '';
                 if ($flags['title'])
@@ -268,7 +360,17 @@ class helper_plugin_include extends DokuWiki_Plugin { // DokuWiki_Helper_Plugin
 
             $this->_convert_instructions($ins, $lvl, $page, $sect, $flags, $root_id, $included_pages);
         }
-        return $ins;
+
+		/*
+		echo '<pre>';
+		print_r($firstimage_);
+		echo '</pre>';
+        
+		//*/
+		
+		$i++;
+		
+		return $ins;
     }
 
     /**
@@ -285,6 +387,7 @@ class helper_plugin_include extends DokuWiki_Plugin { // DokuWiki_Helper_Plugin
      * @author Michael Klier <chi@chimeric.de>
      */
     function _convert_instructions(&$ins, $lvl, $page, $sect, $flags, $root_id, $included_pages = array()) {
+		
         global $conf;
 
         // filter instructions if needed
@@ -660,7 +763,10 @@ class helper_plugin_include extends DokuWiki_Plugin { // DokuWiki_Helper_Plugin
      * @author Michael Hamann <michael@content-space.de>
      */
     function _get_included_pages($mode, $page, $sect, $parent_id, $flags) {
-        global $conf;
+		
+		//echo '->'.$mode.$page.$sect.$parent_id.print_r($flags).'<-<br>';
+        
+		global $conf;
         $pages = array();
         switch($mode) {
         case 'namespace':
@@ -671,8 +777,22 @@ class helper_plugin_include extends DokuWiki_Plugin { // DokuWiki_Helper_Plugin
             search($pagearrays, $conf['datadir'], 'search_allpages', array('depth' => $depth), $ns);
             if (is_array($pagearrays)) {
                 foreach ($pagearrays as $pagearray) {
-                    if (!isHiddenPage($pagearray['id'])) // skip hidden pages
-                        $pages[] = $pagearray['id'];
+                    if (!isHiddenPage($pagearray['id'])) { // skip hidden pages
+                        
+						//stron o nazwie jak foldery nie pokazuje
+						if(!(is_dir(DOKU_INC . $conf['savedir'] . '/pages/' . str_replace(':', '/', $pagearray['id'])))) {
+							
+							$pages[] = $pagearray['id'];	
+							
+							/*
+							echo '<pre>';
+							print_r($pagearray['id']);
+							echo '</pre>';
+							//*/
+							
+						}
+	
+					}
                 }
             }
             break;
@@ -746,6 +866,13 @@ class helper_plugin_include extends DokuWiki_Plugin { // DokuWiki_Helper_Plugin
             $exists = page_exists($page);
             $result[] = array('id' => $page, 'exists' => $exists, 'parent_id' => $parent_id);
         }
+
+		/*
+		echo '<pre>';
+		print_r($result);
+		echo '</pre>';
+		//*/
+		
         return $result;
     }
 

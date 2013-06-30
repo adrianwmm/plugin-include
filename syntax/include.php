@@ -105,6 +105,7 @@ class syntax_plugin_include_include extends DokuWiki_Syntax_Plugin {
             $this->helper =& plugin_load('helper', 'include');
         $flags = $this->helper->get_flags($flags);
 
+
         $pages = $this->helper->_get_included_pages($mode, $page, $sect, $parent_id, $flags);
 
         if ($format == 'metadata') {
@@ -128,6 +129,7 @@ class syntax_plugin_include_include extends DokuWiki_Syntax_Plugin {
             $secids = p_get_metadata($ID, 'plugin_include secids');
         }
 
+		$i = 1;
         foreach ($pages as $page) {
             extract($page);
             $id = $page['id'];
@@ -144,15 +146,23 @@ class syntax_plugin_include_include extends DokuWiki_Syntax_Plugin {
                     $renderer->meta['plugin_include']['secids'][$id] = array('hid' => 'plugin_include__'.str_replace(':', '__', $id), 'pos' => $pos);
                 }
             }
-
+			
             if (isset($secids[$id]) && $pos === $secids[$id]['pos']) {
                 $flags['include_secid'] = $secids[$id]['hid'];
             } else {
                 unset($flags['include_secid']);
             }
 
-            $instructions = $this->helper->_get_instructions($id, $sect, $mode, $level, $flags, $root_id, $secids);
-
+            $instructions = $this->helper->_get_instructions($id, $sect, $mode, $level, $flags, $root_id, $secids, $i);
+			$i++;
+			
+			/*
+			echo '<pre>';
+			print_r($instructions);
+			echo '</pre>';
+			//*/
+			//return;
+			
             $renderer->nest($instructions);
 
             array_pop($page_stack);
